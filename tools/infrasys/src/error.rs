@@ -1,0 +1,152 @@
+use snafu::Snafu;
+use std::io;
+use std::path::PathBuf;
+
+#[derive(Debug, Snafu)]
+#[snafu(visibility = "pub(super)")]
+pub enum Error {
+    #[snafu(display("Error reading Infra.toml: {}", source))]
+    Config { source: pubsys_config::Error },
+
+    #[snafu(display("Failed to start tuftool: {}", source))]
+    TuftoolSpawn { source: io::Error },
+
+    #[snafu(display("Infra.toml is missing {}", missing))]
+    MissingConfig { missing: String },
+
+    #[snafu(display("Error splitting shell command - {} - input: {}", source, command))]
+    CommandSplit {
+        command: String,
+        source: shell_words::ParseError,
+    },
+
+    #[snafu(display("Failed to create async runtime: {}", source))]
+    Runtime { source: std::io::Error },
+
+    #[snafu(display("Failed to create CFN stack {} in {}: {}", stack_name, region, source))]
+    CreateStack {
+        stack_name: String,
+        region: String,
+        source: rusoto_core::RusotoError<rusoto_cloudformation::CreateStackError>,
+    },
+
+    #[snafu(display(
+        "Failed to fetch stack details for CFN stack {} in {}: {}",
+        stack_name,
+        region,
+        source
+    ))]
+    DescribeStack {
+        stack_name: String,
+        region: String,
+        source: rusoto_core::RusotoError<rusoto_cloudformation::DescribeStacksError>,
+    },
+
+    #[snafu(display("Failed to parse {} to a valid rusoto region: {}", what, source))]
+    ParseRegion {
+        what: String,
+        source: rusoto_core::region::ParseRegionError,
+    },
+
+    #[snafu(display(
+        "Failed to find field {} after attempting to create resource {}",
+        what,
+        resource_name
+    ))]
+    ParseResponse { what: String, resource_name: String },
+
+    #[snafu(display("Failed to get bucket policy for bucket {}: {}", bucket_name, source))]
+    GetPolicy {
+        bucket_name: String,
+        source: rusoto_core::RusotoError<rusoto_s3::GetBucketPolicyError>,
+    },
+
+    #[snafu(display("Failed to get bucket policy statement for bucket {}", bucket_name))]
+    GetPolicyStatement { bucket_name: String },
+
+    #[snafu(display(
+        "Failed to update bucket policy for bucket {}: {}",
+        bucket_name,
+        source
+    ))]
+    PutPolicy {
+        bucket_name: String,
+        source: rusoto_core::RusotoError<rusoto_s3::PutBucketPolicyError>,
+    },
+
+    #[snafu(display("Failed to push object to bucket {}: {}", bucket_name, source))]
+    PutObject {
+        bucket_name: String,
+        source: rusoto_core::RusotoError<rusoto_s3::PutObjectError>,
+    },
+
+    #[snafu(display("Missing environment variable '{}'", var))]
+    Environment {
+        var: String,
+        source: std::env::VarError,
+    },
+
+    #[snafu(display("Failed to read file at {}: {}", path.display(), source))]
+    FileRead { path: PathBuf, source: io::Error },
+
+    #[snafu(display("Failed to open file at {}: {}", path.display(), source))]
+    FileOpen { path: PathBuf, source: io::Error },
+
+    #[snafu(display("Failed to write file in {}: {}", path.display(), source))]
+    FileWrite { path: PathBuf, source: io::Error },
+
+    #[snafu(display("File already exists at {}", path.display()))]
+    FileExists { path: PathBuf },
+
+    #[snafu(display(
+        "Failed to create keys due to invalid key config. Missing {}.",
+        missing
+    ))]
+    KeyConfig { missing: String },
+
+    #[snafu(display(
+        "Failed to create new keys or access pre-existing keys in available_keys list."
+    ))]
+    KeyCreation,
+
+    #[snafu(display("Invalid path {} for {}", path.display(), thing))]
+    Path { path: PathBuf, thing: String },
+
+    #[snafu(display("Failed to create directory {}: {}", path.display(), source))]
+    Mkdir { path: PathBuf, source: io::Error },
+
+    #[snafu(display("Failed to convert {} to URL: {}", input, source))]
+    ParseUrl {
+        input: String,
+        source: url::ParseError,
+    },
+
+    #[snafu(display("Failed to parse {} to int: {}", what, source))]
+    ParseInt {
+        what: String,
+        source: std::num::ParseIntError,
+    },
+
+    #[snafu(display("Publication/Root key threshold must be <= {}, currently {}", num_keys.to_string(), threshold))]
+    InvalidThreshold { threshold: String, num_keys: usize },
+
+    #[snafu(display("Failed to convert updated Infra.toml information to yaml: {}", source))]
+    InvalidYaml { source: serde_yaml::Error },
+
+    #[snafu(display("Failed to convert {} to yaml: {}", what, source))]
+    InvalidJson {
+        what: String,
+        source: serde_json::Error,
+    },
+
+    #[snafu(display("Failed to get parent of path: {}", path.display()))]
+    Parent { path: PathBuf },
+
+    #[snafu(display("Logger setup error: {}", source))]
+    Logger { source: log::SetLoggerError },
+
+    #[snafu(display("Returned {}: tuftool {}", code, command))]
+    TuftoolResult { code: String, command: String },
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
