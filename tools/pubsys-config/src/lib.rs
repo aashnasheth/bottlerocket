@@ -5,7 +5,7 @@ use crate::vmware::VmwareConfig;
 use chrono::Duration;
 use parse_datetime::parse_offset;
 use serde::{Deserialize, Deserializer, Serialize};
-use snafu::ResultExt;
+use snafu::{OptionExt, ResultExt};
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryFrom;
 use std::fs;
@@ -37,6 +37,16 @@ impl InfraConfig {
         toml::from_str(&infra_config_str).context(error::InvalidToml { path })
     }
 
+    /// Deserializes an InfraConfig from a Infra.lock file at a given path
+    pub fn from_lock_path<P>(path: P) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let path = path.as_ref();
+        let infra_config_str = fs::read_to_string(path).context(error::File { path })?;
+        serde_yaml::from_str(&infra_config_str).context(error::InvalidLock { path })
+    }
+
     /// Deserializes an InfraConfig from a given path, if it exists, otherwise builds a default
     /// config
     pub fn from_path_or_default<P>(path: P) -> Result<Self>
@@ -50,14 +60,21 @@ impl InfraConfig {
         }
     }
 
-    /// Deserializes an InfraConfig from a Infra.lock file at a given path
-    pub fn from_lock_path<P>(path: P) -> Result<Self>
-    where
-        P: AsRef<Path>,
-    {
-        let path = path.as_ref();
-        let infra_config_str = fs::read_to_string(path).context(error::File { path })?;
-        serde_yaml::from_str(&infra_config_str).context(error::InvalidLock { path })
+    /// Deserializes an InfraConfig from Infra.lock, if it exists, otherwise uses Infra.toml
+    /// If the default flag is true, will create a default config if Infra.toml doesn't exist
+    pub fn from_path_or_lock(path: &Path, default: bool) -> Result<Self> {
+        let lock_path = &path
+            .parent()
+            .context(error::Parent { path: &path })?
+            .join("Infra.lock");
+
+        if lock_path.exists() {
+            Self::from_lock_path(lock_path)
+        } else if default {
+            Self::from_path_or_default(&path)
+        } else {
+            Self::from_path(&path)
+        }
     }
 }
 
@@ -228,6 +245,9 @@ mod error {
 
         #[snafu(display("Missing config: {}", what))]
         MissingConfig { what: String },
+
+        #[snafu(display("Failed to get parent of path: {}", path.display()))]
+        Parent { path: PathBuf },
     }
 }
 pub use error::Error;
