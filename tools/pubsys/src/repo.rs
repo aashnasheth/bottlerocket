@@ -426,12 +426,24 @@ pub(crate) fn run(args: &Args, repo_args: &RepoArgs) -> Result<()> {
 
     // Build repo   =^..^=   =^..^=   =^..^=   =^..^=
 
-    info!(
-        "Checking for infra config at path: {}",
-        args.infra_config_path.display()
-    );
-    let infra_config =
-        InfraConfig::from_path_or_default(&args.infra_config_path).context(error::Config)?;
+    // If a lock file exists, use that, otherwise use Infra.toml or default
+    let lock_path = &args
+        .infra_config_path
+        .parent()
+        .context(error::Parent {
+            path: &args.infra_config_path,
+        })?
+        .join("Infra.lock");
+    info!("Checking for infra config at path: {}", lock_path.display());
+    let infra_config = if lock_path.is_file() {
+        InfraConfig::from_lock_path(lock_path).context(error::Config)?
+    } else {
+        info!(
+            "Checking for infra config at path: {}",
+            args.infra_config_path.display()
+        );
+        InfraConfig::from_path_or_default(&args.infra_config_path).context(error::Config)?
+    };
     trace!("Using infra config: {:?}", infra_config);
 
     // If the user has the requested (or "default") repo defined in their Infra.toml, use it,
@@ -669,6 +681,9 @@ mod error {
 
         #[snafu(display("Non-UTF8 path '{}' not supported", path.display()))]
         NonUtf8Path { path: PathBuf },
+
+        #[snafu(display("Failed to get parent of path: {}", path.display()))]
+        Parent { path: PathBuf },
 
         #[snafu(display("Invalid URL '{}': {}", input, source))]
         ParseUrl {

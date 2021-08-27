@@ -128,12 +128,24 @@ fn refresh_repo(
 
 /// Common entrypoint from main()
 pub(crate) fn run(args: &Args, refresh_repo_args: &RefreshRepoArgs) -> Result<(), Error> {
-    info!(
-        "Using infra config from path: {}",
-        args.infra_config_path.display()
-    );
-    let infra_config =
-        InfraConfig::from_path(&args.infra_config_path).context(repo_error::Config)?;
+    // If a lock file exists, use that, otherwise use Infra.toml
+    let lock_path = &args
+        .infra_config_path
+        .parent()
+        .context(repo_error::Parent {
+            path: &args.infra_config_path,
+        })?
+        .join("Infra.lock");
+    let infra_config = if lock_path.is_file() {
+        info!("Using infra lock from path: {}", lock_path.display());
+        InfraConfig::from_lock_path(lock_path).context(repo_error::Config)?
+    } else {
+        info!(
+            "Using infra config from path: {}",
+            args.infra_config_path.display()
+        );
+        InfraConfig::from_path(&args.infra_config_path).context(repo_error::Config)?
+    };
     trace!("Parsed infra config: {:?}", infra_config);
 
     let repo_config = infra_config

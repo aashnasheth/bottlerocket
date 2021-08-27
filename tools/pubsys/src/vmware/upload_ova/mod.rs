@@ -45,13 +45,24 @@ pub(crate) struct UploadArgs {
 
 /// Common entrypoint from main()
 pub(crate) fn run(args: &Args, upload_args: &UploadArgs) -> Result<()> {
-    // Get infra config
-    info!(
-        "Checking for infra config at path: {}",
-        args.infra_config_path.display()
-    );
-    let infra_config =
-        InfraConfig::from_path_or_default(&args.infra_config_path).context(error::InfraConfig)?;
+    // If a lock file exists, use that, otherwise use Infra.toml or default
+    let lock_path = &args
+        .infra_config_path
+        .parent()
+        .context(error::Parent {
+            path: &args.infra_config_path,
+        })?
+        .join("Infra.lock");
+    info!("Checking for infra config at path: {}", lock_path.display());
+    let infra_config = if lock_path.is_file() {
+        InfraConfig::from_lock_path(lock_path).context(error::InfraConfig)?
+    } else {
+        info!(
+            "Checking for infra config at path: {}",
+            args.infra_config_path.display()
+        );
+        InfraConfig::from_path_or_default(&args.infra_config_path).context(error::InfraConfig)?
+    };
     trace!("Using infra config: {:?}", infra_config);
 
     let vmware = infra_config
@@ -225,6 +236,9 @@ mod error {
 
         #[snafu(display("Infra.toml is missing {}", missing))]
         MissingConfig { missing: String },
+
+        #[snafu(display("Failed to get parent of path: {}", path.display()))]
+        Parent { path: PathBuf },
 
         #[snafu(display("Error rendering template: {}", source))]
         RenderTemplate { source: tinytemplate::error::Error },

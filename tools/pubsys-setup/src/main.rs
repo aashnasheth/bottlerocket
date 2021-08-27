@@ -176,15 +176,25 @@ fn run() -> Result<()> {
 /// Searches Infra.toml and expected local paths for a root role and key for the requested repo.
 fn find_root_role_and_key(args: &Args) -> Result<(Option<&PathBuf>, Option<Url>)> {
     let (mut root_role_path, mut key_url) = (None, None);
+    let lock_path = &args
+        .infra_config_path
+        .parent()
+        .context(error::Parent {
+            path: &args.infra_config_path,
+        })?
+        .join("Infra.lock");
 
-    if args.infra_config_path.exists() {
-        info!(
-            "Found infra config at path: {}",
-            args.infra_config_path.display()
-        );
-
-        let infra_config =
-            InfraConfig::from_path(&args.infra_config_path).context(error::Config)?;
+    if args.infra_config_path.exists() || lock_path.exists() {
+        let infra_config = if lock_path.is_file() {
+            info!("Found infra lock at path: {}", lock_path.display());
+            InfraConfig::from_lock_path(lock_path).context(error::Config)?
+        } else {
+            info!(
+                "Found infra config at path: {}",
+                args.infra_config_path.display()
+            );
+            InfraConfig::from_path(&args.infra_config_path).context(error::Config)?
+        };
         trace!("Parsed infra config: {:?}", infra_config);
 
         // Check whether the user has the relevant repo defined in their Infra.toml.
@@ -277,8 +287,13 @@ fn find_root_role_and_key(args: &Args) -> Result<(Option<&PathBuf>, Option<Url>)
         }
     } else {
         info!(
-            "No infra config at '{}' - using local roles/keys",
-            args.infra_config_path.display()
+            "No infra config or lock at '{}' - using local roles/keys",
+            args.infra_config_path
+                .parent()
+                .context(error::Parent {
+                    path: &args.infra_config_path,
+                })?
+                .display()
         );
     }
 
@@ -350,6 +365,9 @@ mod error {
 
         #[snafu(display("Invalid path '{}' for {}", path.display(), thing))]
         Path { path: PathBuf, thing: String },
+
+        #[snafu(display("Failed to get parent of path: {}", path.display()))]
+        Parent { path: PathBuf },
 
         #[snafu(display("Failed to read '{}': {}", path.display(), source))]
         ReadFile { path: PathBuf, source: io::Error },

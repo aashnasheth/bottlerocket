@@ -56,11 +56,24 @@ pub(crate) struct SsmArgs {
 pub(crate) async fn run(args: &Args, ssm_args: &SsmArgs) -> Result<()> {
     // Setup   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=
 
-    info!(
-        "Using infra config from path: {}",
-        args.infra_config_path.display()
-    );
-    let infra_config = InfraConfig::from_path(&args.infra_config_path).context(error::Config)?;
+    // If a lock file exists, use that, otherwise use Infra.toml
+    let lock_path = &args
+        .infra_config_path
+        .parent()
+        .context(error::Parent {
+            path: &args.infra_config_path,
+        })?
+        .join("Infra.lock");
+    let infra_config = if lock_path.is_file() {
+        info!("Using infra lock from path: {}", lock_path.display());
+        InfraConfig::from_lock_path(lock_path).context(error::Config)?
+    } else {
+        info!(
+            "Using infra config from path: {}",
+            args.infra_config_path.display()
+        );
+        InfraConfig::from_path(&args.infra_config_path).context(error::Config)?
+    };
     trace!("Parsed infra config: {:#?}", infra_config);
     let aws = infra_config.aws.unwrap_or_else(Default::default);
     let ssm_prefix = aws.ssm_prefix.as_deref().unwrap_or_else(|| "");
@@ -352,6 +365,11 @@ mod error {
 
         #[snafu(display("Cowardly refusing to overwrite parameters without ALLOW_CLOBBER"))]
         NoClobber,
+
+        #[snafu(display("Failed to get parent of path: {}", path.display()))]
+        Parent {
+            path: PathBuf,
+        },
 
         ParseRegion {
             source: crate::aws::Error,

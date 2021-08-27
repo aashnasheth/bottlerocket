@@ -85,12 +85,24 @@ pub(crate) async fn run(args: &Args, publish_args: &PublishArgs) -> Result<()> {
         }
     );
 
-    info!(
-        "Checking for infra config at path: {}",
-        args.infra_config_path.display()
-    );
-    let infra_config =
-        InfraConfig::from_path_or_default(&args.infra_config_path).context(error::Config)?;
+    // If a lock file exists, use that, otherwise use Infra.toml or default
+    let lock_path = &args
+        .infra_config_path
+        .parent()
+        .context(error::Parent {
+            path: &args.infra_config_path,
+        })?
+        .join("Infra.lock");
+    info!("Checking for infra config at path: {}", lock_path.display());
+    let infra_config = if lock_path.is_file() {
+        InfraConfig::from_lock_path(lock_path).context(error::Config)?
+    } else {
+        info!(
+            "Checking for infra config at path: {}",
+            args.infra_config_path.display()
+        );
+        InfraConfig::from_path_or_default(&args.infra_config_path).context(error::Config)?
+    };
     trace!("Using infra config: {:?}", infra_config);
 
     let aws = infra_config.aws.unwrap_or_else(Default::default);
@@ -610,6 +622,11 @@ mod error {
         MultipleImages {
             region: String,
             images: Vec<String>,
+        },
+
+        #[snafu(display("Failed to get parent of path: {}", path.display()))]
+        Parent {
+            path: PathBuf,
         },
 
         ParseRegion {
