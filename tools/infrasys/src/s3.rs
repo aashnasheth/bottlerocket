@@ -213,7 +213,7 @@ mod tests {
         let excess_ending_2 = "/prefix/*";
         let slash_and_excess_ending = "prefix/*";
         let empty = "";
-        let single_slash = "";
+        let single_slash = "/";
 
         assert_eq!("/prefix", format_prefix(&valid.to_string()));
         assert_eq!("/prefix", format_prefix(&missing_slash.to_string()));

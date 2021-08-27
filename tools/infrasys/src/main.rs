@@ -5,12 +5,12 @@ mod s3;
 mod shared;
 
 use error::Result;
-use log::info;
+use log::{error, info};
 use pubsys_config::InfraConfig;
 use sha2::{Digest, Sha512};
 use shared::KeyRole;
 use simplelog::{Config as LogConfig, LevelFilter, SimpleLogger};
-use snafu::{OptionExt, ResultExt};
+use snafu::{ensure, OptionExt, ResultExt};
 use std::path::{Path, PathBuf};
 use std::{fs, process};
 use structopt::StructOpt;
@@ -76,8 +76,19 @@ fn run() -> Result<()> {
 }
 
 async fn check_infra_lock(toml_path: &Path) -> Result<()> {
-    // TODO: implement (coming in next PR)
-    println!("Successfully in check_infra_method!");
+    let lock_path = toml_path
+        .parent()
+        .context(error::Parent { path: toml_path })?
+        .join("Infra.lock");
+
+    ensure!(!lock_path.is_file(), {
+        error!(
+            "It looks like you've already created some resources for your custom TUF repository because a lock file exists at '{}'.
+            \nPlease clean up your TUF resources in AWS, delete Infra.lock, and run again.",
+            lock_path.display()
+        );
+        error::FileExists { path: lock_path }
+    });
     Ok(())
 }
 

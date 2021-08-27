@@ -30,13 +30,12 @@ macro_rules! tuftool {
 }
 
 pub fn check_root(root_role_path: &Path) -> Result<()> {
-    if root_role_path.is_file() {
+    ensure!(!root_role_path.is_file(), {
         warn!("Cowardly refusing to overwrite the existing root.json at {}. Please manually delete it and run again.", root_role_path.display());
         error::FileExists {
             path: root_role_path,
         }
-        .fail()?
-    }
+    });
     Ok(())
 }
 
