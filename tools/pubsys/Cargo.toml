@@ -45,3 +45,4 @@ tough-ssm = "0.6"
 update_metadata = { path = "../../sources/updater/update_metadata/" }
 url = { version = "2.1.0", features = ["serde"] }
 tempfile = "3.1"
+rusoto_kms = { version = "0.47.0", default-features = false, features = ["rustls"] }
