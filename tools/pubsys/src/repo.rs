@@ -10,12 +10,15 @@ use lazy_static::lazy_static;
 use log::{debug, info, trace, warn};
 use parse_datetime::parse_datetime;
 use pubsys_config::{InfraConfig, RepoConfig, RepoExpirationPolicy, SigningKeyConfig};
+use rusoto_core::Region;
+use rusoto_kms::KmsClient;
 use semver::Version;
 use snafu::{ensure, OptionExt, ResultExt};
 use std::convert::TryInto;
 use std::fs::{self, File};
 use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
 use tough::{
@@ -391,12 +394,28 @@ fn is_file_not_found_error(e: &tough::error::Error) -> bool {
 fn get_signing_key_source(signing_key_config: &SigningKeyConfig) -> Result<Box<dyn KeySource>> {
     match signing_key_config {
         SigningKeyConfig::file { path } => Ok(Box::new(LocalKeySource { path: path.clone() })),
-        SigningKeyConfig::kms { key_id, .. } => Ok(Box::new(KmsKeySource {
+        SigningKeyConfig::kms { key_id, config, .. } => Ok(Box::new(KmsKeySource {
             profile: None,
             key_id: key_id
                 .clone()
                 .context(error::MissingConfig { missing: "key_id" })?,
-            client: None,
+            client: if let Some(region) = config
+                .as_ref()
+                .context(error::MissingConfig {
+                    missing: "KMS config",
+                })?
+                .available_keys
+                .get(
+                    key_id
+                        .as_ref()
+                        .context(error::MissingConfig { missing: "key_id" })?,
+                ) {
+                Some(KmsClient::new(
+                    Region::from_str(region).context(error::ParseRegion { what: region })?,
+                ))
+            } else {
+                None
+            },
             signing_algorithm: KmsSigningAlgorithm::RsassaPssSha256,
         })),
         SigningKeyConfig::ssm { parameter } => Ok(Box::new(SsmKeySource {
@@ -684,6 +703,12 @@ mod error {
 
         #[snafu(display("Failed to get parent of path: {}", path.display()))]
         Parent { path: PathBuf },
+
+        #[snafu(display("Failed to parse {} to a valid rusoto region: {}", what, source))]
+        ParseRegion {
+            what: String,
+            source: rusoto_core::region::ParseRegionError,
+        },
 
         #[snafu(display("Invalid URL '{}': {}", input, source))]
         ParseUrl {
