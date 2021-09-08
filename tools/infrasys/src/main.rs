@@ -135,11 +135,9 @@ async fn create_infra(toml_path: &Path, root_role_path: &Path) -> Result<()> {
             *repo_info.metadata_base_url = Some(
                 Url::parse(
                     format!(
-                        "https://{}{}/{}/{}/",
+                        "https://{}{}/",
                         &bucket_rdn,
-                        &repo_info.prefix,
-                        shared::getenv("BUILDSYS_VARIANT")?,
-                        shared::getenv("BUILDSYS_ARCH")?
+                        &repo_info.prefix
                     )
                     .as_str(),
                 )

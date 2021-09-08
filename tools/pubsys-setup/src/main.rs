@@ -178,11 +178,6 @@ fn find_root_role_and_key(args: &Args) -> Result<(Option<&PathBuf>, Option<Url>)
     let (mut root_role_path, mut key_url) = (None, None);
 
     if InfraConfig::lock_or_infra_config_exists(&args.infra_config_path).context(error::Config)? {
-        info!(
-            "Found infra config at path: {}",
-            args.infra_config_path.display()
-        );
-
         let infra_config = InfraConfig::from_path_or_lock(&args.infra_config_path, false)
             .context(error::Config)?;
         trace!("Parsed infra config: {:?}", infra_config);

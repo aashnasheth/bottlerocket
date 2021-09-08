@@ -3,6 +3,7 @@ pub mod vmware;
 
 use crate::vmware::VmwareConfig;
 use chrono::Duration;
+use log::info;
 use parse_datetime::parse_offset;
 use serde::{Deserialize, Deserializer, Serialize};
 use snafu::{OptionExt, ResultExt};
@@ -65,10 +66,18 @@ impl InfraConfig {
     pub fn from_path_or_lock(path: &Path, default: bool) -> Result<Self> {
         let lock_path = Self::compute_lock_path(&path)?;
         if lock_path.exists() {
+            info!(
+                "Found infra config at path: {}",
+                lock_path.display()
+            );
             Self::from_lock_path(lock_path)
         } else if default {
             Self::from_path_or_default(&path)
         } else {
+            info!(
+                "Found infra config at path: {}",
+                path.display()
+            );
             Self::from_path(&path)
         }
     }
