@@ -63,11 +63,7 @@ impl InfraConfig {
     /// Deserializes an InfraConfig from Infra.lock, if it exists, otherwise uses Infra.toml
     /// If the default flag is true, will create a default config if Infra.toml doesn't exist
     pub fn from_path_or_lock(path: &Path, default: bool) -> Result<Self> {
-        let lock_path = &path
-            .parent()
-            .context(error::Parent { path: &path })?
-            .join("Infra.lock");
-
+        let lock_path = Self::compute_lock_path(&path)?;
         if lock_path.exists() {
             Self::from_lock_path(lock_path)
         } else if default {
@@ -75,6 +71,32 @@ impl InfraConfig {
         } else {
             Self::from_path(&path)
         }
+    }
+
+    /// Looks for a file named `Infra.lock` in the same directory as the file named by
+    /// `infra_config_path`. Returns true if the `Infra.lock` file exists, or if `infra_config_path`
+    /// exists. Returns an error if the directory of `infra_config_path` cannot be found.
+    pub fn lock_or_infra_config_exists<P>(infra_config_path: P) -> Result<bool>
+    where
+        P: AsRef<Path>,
+    {
+        let lock_path = Self::compute_lock_path(&infra_config_path)?;
+        Ok(lock_path.exists() || infra_config_path.as_ref().exists())
+    }
+
+    /// Returns the file path to a file named `Infra.lock` in the same directory as the file named
+    /// by `infra_config_path`.
+    fn compute_lock_path<P>(infra_config_path: P) -> Result<PathBuf>
+    where
+        P: AsRef<Path>,
+    {
+        Ok(infra_config_path
+            .as_ref()
+            .parent()
+            .context(error::Parent {
+                path: infra_config_path.as_ref(),
+            })?
+            .join("Infra.lock"))
     }
 }
 
